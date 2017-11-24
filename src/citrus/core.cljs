@@ -6,7 +6,7 @@
   "Creates an instance of Reconciler
 
     (citrus/reconciler {:state (atom {})
-                        :controllers {:counter counter/control}
+                        :handler handler
                         :effect-handlers {:http effects/http}
                         :batched-updates f
                         :chunked-updates f})
@@ -15,16 +15,16 @@
 
     config              - a map of
       state             - app state atom
-      controllers       - a hash of state controllers
+      handler           - event handler
       effect-handlers   - a hash of effects handlers
       batched-updates   - a function used to batch reconciler updates, defaults to `js/requestAnimationFrame`
       chunked-updates   - a function used to divide reconciler update into chunks, doesn't used by default
 
   Returned value supports deref, watches and metadata.
   The only supported option is `:meta`"
-  [{:keys [state controllers effect-handlers batched-updates chunked-updates]} & {:as options}]
+  [{:keys [state handler effect-handlers batched-updates chunked-updates]} & {:as options}]
   (r/Reconciler.
-    controllers
+    handler
     effect-handlers
     state
     (volatile! [])
@@ -41,11 +41,10 @@
   Arguments
 
     reconciler - an instance of Reconciler
-    controller - name of a controller
-    event      - a dispatch value of a method defined in the controller
+        event      - a dispatch value of a method defined in the controller
     args       - arguments to be passed into the controller"
-  [reconciler controller event & args]
-  (r/dispatch! reconciler controller event args))
+  [reconciler event & args]
+  (r/dispatch! reconciler event args))
 
 (defn dispatch-sync!
   "Invoke an event on particular controller synchronously
@@ -55,38 +54,10 @@
   Arguments
 
     reconciler - an instance of Reconciler
-    controller - name of a controller
-    event      - a dispatch value of a method defined in the controller
-    args       - arguments to be passed into the controller"
-  [reconciler controller event & args]
-  (r/dispatch-sync! reconciler controller event args))
-
-(defn broadcast!
-  "Invoke an event on all controllers asynchronously
-
-    (citrus/broadcast! reconciler :init)
-
-  Arguments
-
-    reconciler - an instance of Reconciler
     event      - a dispatch value of a method defined in the controller
     args       - arguments to be passed into the controller"
   [reconciler event & args]
-  (r/broadcast! reconciler event args))
-
-(defn broadcast-sync!
-  "Invoke an event on all controllers synchronously
-
-    (citrus/broadcast! reconciler :init)
-
-  Arguments
-
-    reconciler - an instance of Reconciler
-    event      - a dispatch value of a method defined in the controller
-    args       - arguments to be passed into the controller"
-  [reconciler event & args]
-  (r/broadcast-sync! reconciler event args))
-
+  (r/dispatch-sync! reconciler event args))
 
 (defn subscription
   "Create a subscription to state updates

@@ -1,6 +1,6 @@
-(defproject org.roman01la/citrus "3.0.0"
+(defproject com.tiensonqin/citrus "3.0.1-SNAPSHOT"
   :description "State management library for Rum"
-  :url "https://github.com/roman01la/citrus"
+  :url "https://github.com/tiensonqin/citrus"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0" :scope "provided"]

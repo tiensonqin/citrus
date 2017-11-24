@@ -14,12 +14,10 @@
   (vreset! scheduled? (schedule! f)))
 
 (defprotocol IReconciler
-  (dispatch! [this controller event args])
-  (dispatch-sync! [this controller event args])
-  (broadcast! [this event args])
-  (broadcast-sync! [this event args]))
+  (dispatch! [this event args])
+  (dispatch-sync! [this event args]))
 
-(deftype Reconciler [controllers effect-handlers state queue scheduled? batched-updates chunked-updates meta]
+(deftype Reconciler [handler effect-handlers state queue scheduled? batched-updates chunked-updates meta]
 
   Object
   (equiv [this other]
@@ -60,47 +58,49 @@
     (-write writer "]"))
 
   IReconciler
-  (dispatch! [this cname event args]
-    (queue-effects!
-      queue
-      [cname #((get controllers cname) event args (get @state cname))])
+  (dispatch! [this event args]
+    (let [ctrl (keyword (namespace event))
+          seperate-state? (not= ctrl :citrus)]
+      (queue-effects!
+       queue
+       #(apply (get handler event)
+          (if seperate-state? (get @state ctrl) @state)
+          args))
 
-    (schedule-update!
-      batched-updates
-      scheduled?
-      (fn []
-        (let [effects
-              (map (fn [[cname ctrl]] [cname (ctrl)]) @queue)]
-          (clear-queue! queue)
-          (let [state-effects (filter (comp :state second) effects)
-                other-effects (->> effects
-                                   (map (fn [[cname effect]]
-                                          [cname (dissoc effect :state)]))
-                                   (filter (comp seq second)))]
-            (when (seq state-effects)
-              (swap! state
-                #(reduce (fn [agg [cname {cstate :state}]]
-                           (assoc agg cname cstate))
-                         % state-effects)))
-            (when (seq other-effects)
-              (m/doseq [[cname effects] effects]
-                (m/doseq [[id effect] effects]
-                  (when-let [handler (get effect-handlers id)]
-                    (handler this cname effect))))))))))
+      (schedule-update!
+       batched-updates
+       scheduled?
+       (fn []
+         (let [effects
+               (map (fn [f] (f)) @queue)]
+           (clear-queue! queue)
+           (let [state-effects (filter :state effects)
+                 other-effects (->> effects
+                                    (map (fn [effect]
+                                           (dissoc effect :state)))
+                                    (filter seq))]
+             (when (seq state-effects)
+               (swap! state #(reduce (fn [agg {cstate :state}]
+                                       (if seperate-state?
+                                         (update agg ctrl merge cstate)
+                                         (merge agg cstate)))
+                                     % state-effects)))
+             (when (seq other-effects)
+               (m/doseq [effects effects]
+                 (m/doseq [[id effect] effects]
+                   (when-let [handler (get effect-handlers id)]
+                     (handler this effect)))))))))))
 
-  (dispatch-sync! [this cname event args]
-    (let [effects ((get controllers cname) event args (get @state cname))]
+  (dispatch-sync! [this event args]
+    (let [effects (apply (get handler event) @state args)
+          ctrl (keyword (namespace event))
+          seperate-state? (not= ctrl :citrus)]
       (m/doseq [[id effect] effects]
         (let [handler (get effect-handlers id)]
           (cond
-            (= id :state) (swap! state assoc cname effect)
-            handler (handler this cname effect)
-            :else nil)))))
-
-  (broadcast! [this event args]
-    (m/doseq [controller (keys controllers)]
-      (dispatch! this controller event args)))
-
-  (broadcast-sync! [this event args]
-    (m/doseq [controller (keys controllers)]
-      (dispatch-sync! this controller event args))))
+            (= id :state) (swap! state (fn [state]
+                                         (if seperate-state?
+                                           (update state ctrl merge effect)
+                                           (merge state effect))))
+            handler (handler this effect)
+            :else nil))))))
