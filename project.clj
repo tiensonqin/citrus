@@ -1,4 +1,4 @@
-(defproject com.tiensonqin/citrus "3.0.1-SNAPSHOT"
+(defproject com.tiensonqin/forked-citrus "3.0.1"
   :description "State management library for Rum"
   :url "https://github.com/tiensonqin/citrus"
   :license {:name "Eclipse Public License"
